@@ -392,16 +392,16 @@ void PutGsmToSleep()
 	//Serial.println(F("GSM going to sleep"));
 	gsmSerial.println(F("AT+CSCLK=1"));	//prepare for sleep mode when gsmWakePin is High
 	PurgeGsmBuffer(1000);
-	gsmSerial.println(F("AT+CFUN=0"));	//prepare for gsm module for minimum funcionality
-	PurgeGsmBuffer(3000);
+	//gsmSerial.println(F("AT+CFUN=0"));	//prepare for gsm module for minimum funcionality
+	//PurgeGsmBuffer(3000);
 	digitalWrite(gsmWakePin, HIGH);
 }
 void WakeUpGsm()
 {
 	digitalWrite(gsmWakePin, LOW);	//Awake Gsm
 	delay(1000);
-	gsmSerial.println(F("AT+CFUN=1"));	//prepare for gsm module for full funcionality
-	PurgeGsmBuffer(10000);
+	//gsmSerial.println(F("AT+CFUN=1"));	//prepare for gsm module for full funcionality
+	//PurgeGsmBuffer(10000);
 	gsmSerial.println(F("ATE1"));		//Switch on Echo
 	PurgeGsmBuffer(1000);
 }
@@ -526,8 +526,8 @@ void InitialGsmSetup()
 	PurgeGsmBuffer(1000);
 	gsmSerial.println(F("AT+CSCLK=1"));	//prepare for sleep mode when gsmWakePin is High
 	PurgeGsmBuffer(1000);
-	gsmSerial.println(F("AT+CFUN=1"));	//prepare for gsm module for full funcionality
-	PurgeGsmBuffer(1000);
+	//gsmSerial.println(F("AT+CFUN=1"));	//prepare for gsm module for full funcionality
+	//PurgeGsmBuffer(1000);
 }
 
 void SetUpDs3231()
