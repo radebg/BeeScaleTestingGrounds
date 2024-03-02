@@ -5,13 +5,13 @@
 	Edited: 22/01/2024 
 */
 
-#include <RunningMedian.h>
+//#include <RunningMedian.h>
 #include <Adafruit_SHT31.h>
 #include <avr/sleep.h>
 #include <DS3231.h>
 #include <SoftwareSerial.h>
 #include <Wire.h>
-#include "SparkFunBME280.h"
+//#include "SparkFunBME280.h"
 #include <HX711.h>
 #include <HX711-multi.h>
 
@@ -84,7 +84,7 @@ float scaleCalibrationFactor = -20350;	//Calibration factor for the scale
 
 //Variables for BME280 sensor
 //-------------------------------
-BME280 bme;									// Define Pressure sensor class
+//BME280 bme;									// Define Pressure sensor class
 //-------------------------------
 
 // initialisation of SHT31 sensor for Temperature and Humid
@@ -99,7 +99,7 @@ SoftwareSerial gsmSerial(8, 7);				// Define pins for communicating with gsm mod
 
 //Setting up median filter library
 //----------------------------------------------
-RunningMedian measurements = RunningMedian(10);
+//RunningMedian measurements = RunningMedian(10);
 //----------------------------------------------
 
 
@@ -113,16 +113,15 @@ float ReadWeight(int loops)
 	//	delay(100);
 	//}
 	float raw;
-
+	float weightInGrams;
 	for (int i = 1; i <= loops; i++)
 	{
 		raw = scale.get_units(loops);
-		measurements.add(raw);
 		delay(100);
+		if (weightInGrams<raw*1000)
+			weightInGrams=raw*1000;
 	}
-	float weightInGrams = measurements.getAverage(3)* 1000;
-	//scale.tare();
-	measurements.clear();
+
 	return 	weightInGrams;
 }
 
@@ -172,16 +171,16 @@ void ReadTime()
 float ReadBattery(int loops)
 {
 	analogRead(A0);  // used only for A0 pin to settle. Measurement is ignored
-	float voltage;
+	float voltage=0;
 	int raw;
 	for (int i = 1; i <= loops; i++)
+	raw = analogRead(A0);
 	{
-		raw = analogRead(A0);
-		measurements.add(raw);
+		if (voltage<raw)
+			voltage=raw;
 	}
-	voltage = (measurements.getHighest() / 1023) * 1100; //number in get.Average function is for calculating average of three middle measurements
-	measurements.clear();
-Serial.println(voltage);
+	voltage = (voltage / 1023) * 1100; //number in get.Average function is for calculating average of three middle measurements
+//Serial.println(voltage);
 
 	//map min and max voltage values on analog pin to scale 0% to 100%
 	/*
@@ -197,7 +196,7 @@ Serial.println(voltage);
 	With battery I use maximum value on the pin is 1035mV (on voltage divider), and I consider battery empty when value falls to 882)
 	*/
 	voltage = map(voltage, 882, 1030, 0, 100);
-	Serial.println(voltage);
+	//Serial.println(voltage);
 	/*if (voltage > batteryMax)
 	{
 		voltage = batteryMax;
@@ -222,12 +221,11 @@ float ReadSoil(int loops)
 	{
 		soilRaw = analogRead(A3);
 		percentRaw = ((1023 - soilRaw) / 1023) * 100;
-		measurements.add(percentRaw);
+		if (soilMoisture<percentRaw)
+			soilMoisture=percentRaw;
 	}
-	soilMoisture = measurements.getAverage(3);
 	analogReference(INTERNAL);
 	analogRead(A3);
-	measurements.clear();
 	return soilMoisture;
 }
 float ReadSht31Temp()
@@ -253,21 +251,21 @@ float ReadSht31Humid()
 	return 0;
 	}
 }
-float ReadBmeTemperature()
-{
-	float bmeTemp = bme.readTempC();
-	return bmeTemp;
-}
-float ReadBmeHumid()
-{
-	float bmeHumid = bme.readFloatHumidity();
-	return bmeHumid;
-}
-float ReadBmePressure()
-{
-	float bmePressure = bme.readFloatPressure()/100; // 100 Pa = 1 millibar;
-	return bmePressure;
-}
+// float ReadBmeTemperature()
+// {
+// 	float bmeTemp = bme.readTempC();
+// 	return bmeTemp;
+// }
+// float ReadBmeHumid()
+// {
+// 	float bmeHumid = bme.readFloatHumidity();
+// 	return bmeHumid;
+// }
+// float ReadBmePressure()
+// {
+// 	float bmePressure = bme.readFloatPressure()/100; // 100 Pa = 1 millibar;
+// 	return bmePressure;
+// }
 // int ReadBattPercent()
 // {
 //   String batt;
@@ -341,9 +339,9 @@ void DisplayMeasurementsOnSerialMonitor()
 {
 	PrintTimeAndDate();
 	Serial.println("Battery status: " + String(ReadBattery(1))+" %");
-	Serial.println("BME sensor temperature: " + String(ReadBmeTemperature())+" C");
-	Serial.println("BME sensor humid: " + String(ReadBmeHumid())+" %");
-	Serial.println("BME sensor pressure: " + String(ReadBmePressure()) + " mbar");
+	//Serial.println("BME sensor temperature: " + String(ReadBmeTemperature())+" C");
+	//Serial.println("BME sensor humid: " + String(ReadBmeHumid())+" %");
+	//Serial.println("BME sensor pressure: " + String(ReadBmePressure()) + " mbar");
 	Serial.println("SHT31 sensor temperature: " + String(ReadSht31Temp()) + " C");
 	Serial.println("SHT31 sensor Humid: " + String(ReadSht31Humid()) + " %");
 	Serial.println("Soil moisture: " + String(ReadSoil(10)) + "%");
@@ -607,7 +605,8 @@ void LedSignal(int ledRepeat, int ledDelay)
   if (errorCount>0)
     return errorCount;
   PurgeGsmBuffer(2000);
-	gsmSerial.println(thingSpeakUpadate + "&field1=" + String(ReadSht31Temp())+ "&field2=" + String(ReadSht31Humid()) + "&field3="+ String(battPercent) + "&field4=" + String(ReadBmeTemperature()) + "&field5=" + String(ReadBmePressure()) + "&field6=" + String(ReadBmeHumid())+ "&field7=" + String(tare + ReadWeight(10)) + "&field8=" + String(ReadSoil(10)));
+	gsmSerial.println(thingSpeakUpadate + "&field1=" + String(ReadSht31Temp())+ "&field2=" + String(ReadSht31Humid()) + "&field3="+ String(battPercent) + String(tare + ReadWeight(10)) + "&field8=" + String(ReadSoil(10)));	
+	//gsmSerial.println(thingSpeakUpadate + "&field1=" + String(ReadSht31Temp())+ "&field2=" + String(ReadSht31Humid()) + "&field3="+ String(battPercent) + "&field4=" + String(ReadBmeTemperature()) + "&field5=" + String(ReadBmePressure()) + "&field6=" + String(ReadBmeHumid())+ "&field7=" + String(tare + ReadWeight(10)) + "&field8=" + String(ReadSoil(10)));
 	gsmSerial.println(String(char(26)));
   	PurgeGsmBuffer(2000);
 	//ReadGsmBuffer(2000);
@@ -687,10 +686,10 @@ void setup()
 
 	//bme280 check
 	//----------------------------------------------
-	if (!bme.begin())
-	{
-		Serial.println(F("Could not find a valid BMP280 sensor, check wiring!"));
-	}
+	// if (!bme.begin())
+	// {
+	// 	Serial.println(F("Could not find a valid BMP280 sensor, check wiring!"));
+	// }
 	//----------------------------------------------
   //DisplayMeasurementsOnSerialMonitor();
 LedSignal(0,0);
