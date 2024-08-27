@@ -5,13 +5,13 @@
 	Edited: 22/01/2024 
 */
 
-//#include <RunningMedian.h>
+#include <RunningMedian.h>
 #include <Adafruit_SHT31.h>
 #include <avr/sleep.h>
 #include <DS3231.h>
 #include <SoftwareSerial.h>
 #include <Wire.h>
-//#include "SparkFunBME280.h"
+#include "SparkFunBME280.h"
 #include <HX711.h>
 #include <HX711-multi.h>
 
@@ -84,7 +84,7 @@ float scaleCalibrationFactor = -20350;	//Calibration factor for the scale
 
 //Variables for BME280 sensor
 //-------------------------------
-//BME280 bme;									// Define Pressure sensor class
+BME280 bme;									// Define Pressure sensor class
 //-------------------------------
 
 // initialisation of SHT31 sensor for Temperature and Humid
@@ -99,7 +99,7 @@ SoftwareSerial gsmSerial(8, 7);				// Define pins for communicating with gsm mod
 
 //Setting up median filter library
 //----------------------------------------------
-//RunningMedian measurements = RunningMedian(10);
+RunningMedian measurements = RunningMedian(10);
 //----------------------------------------------
 
 
@@ -113,15 +113,16 @@ float ReadWeight(int loops)
 	//	delay(100);
 	//}
 	float raw;
-	float weightInGrams;
+
 	for (int i = 1; i <= loops; i++)
 	{
-		raw = scale.get_units(loops);
+		raw = scale.get_units(loops),3;
+		measurements.add(raw);
 		delay(100);
-		if (weightInGrams<raw*1000)
-			weightInGrams=raw*1000;
 	}
-
+	float weightInGrams = measurements.getAverage(3)* 1000;
+	//scale.tare();
+	measurements.clear();
 	return 	weightInGrams;
 }
 
@@ -145,9 +146,9 @@ int ResetGSM()
 {
 	errorCount=errorCount+1;
 	Serial.println("GSM ERROR No.: " + String(errorCount)+ " - Resetting");
-	gsmSerial.println(F("AT+CFUN=0"));
-	delay(4000);
-	gsmSerial.println(F("AT+CFUN=1"));
+	// gsmSerial.println(F("AT+CFUN=0"));
+	// delay(4000);
+	// gsmSerial.println(F("AT+CFUN=1"));
 	delay(12000);
 	Serial.println(F("Finished resseting"));
 	return errorCount;
@@ -171,16 +172,16 @@ void ReadTime()
 float ReadBattery(int loops)
 {
 	analogRead(A0);  // used only for A0 pin to settle. Measurement is ignored
-	float voltage=0;
+	float voltage;
 	int raw;
 	for (int i = 1; i <= loops; i++)
-	raw = analogRead(A0);
 	{
-		if (voltage<raw)
-			voltage=raw;
+		raw = analogRead(A0);
+		measurements.add(raw);
 	}
-	voltage = (voltage / 1023) * 1100; //number in get.Average function is for calculating average of three middle measurements
-//Serial.println(voltage);
+	voltage = (measurements.getAverage(3) / 1023) * 1100; //number in get.Average function is for calculating average of three middle measurements
+	measurements.clear();
+
 
 	//map min and max voltage values on analog pin to scale 0% to 100%
 	/*
@@ -193,10 +194,9 @@ float ReadBattery(int loops)
 	SO!!!
 	We have to scale input voltage on that pin to be at maximum 1.1V when battery is full.
 	It can be done with voltage divider (see schematics)
-	With battery I use maximum value on the pin is 1035mV (on voltage divider), and I consider battery empty when value falls to 882)
+	With battery I use maximum value on the pin is 1035mV (on voltage divider), and I consider battery empty when value falls to 880)
 	*/
-	voltage = map(voltage, 882, 1030, 0, 100);
-	//Serial.println(voltage);
+	voltage = map(voltage, 942, 1030, 0, 100);
 	/*if (voltage > batteryMax)
 	{
 		voltage = batteryMax;
@@ -221,11 +221,12 @@ float ReadSoil(int loops)
 	{
 		soilRaw = analogRead(A3);
 		percentRaw = ((1023 - soilRaw) / 1023) * 100;
-		if (soilMoisture<percentRaw)
-			soilMoisture=percentRaw;
+		measurements.add(percentRaw);
 	}
+	soilMoisture = measurements.getAverage(3);
 	analogReference(INTERNAL);
 	analogRead(A3);
+	measurements.clear();
 	return soilMoisture;
 }
 float ReadSht31Temp()
@@ -251,21 +252,21 @@ float ReadSht31Humid()
 	return 0;
 	}
 }
-// float ReadBmeTemperature()
-// {
-// 	float bmeTemp = bme.readTempC();
-// 	return bmeTemp;
-// }
-// float ReadBmeHumid()
-// {
-// 	float bmeHumid = bme.readFloatHumidity();
-// 	return bmeHumid;
-// }
-// float ReadBmePressure()
-// {
-// 	float bmePressure = bme.readFloatPressure()/100; // 100 Pa = 1 millibar;
-// 	return bmePressure;
-// }
+float ReadBmeTemperature()
+{
+	float bmeTemp = bme.readTempC();
+	return bmeTemp;
+}
+float ReadBmeHumid()
+{
+	float bmeHumid = bme.readFloatHumidity();
+	return bmeHumid;
+}
+float ReadBmePressure()
+{
+	float bmePressure = bme.readFloatPressure()/100; // 100 Pa = 1 millibar;
+	return bmePressure;
+}
 // int ReadBattPercent()
 // {
 //   String batt;
@@ -338,10 +339,10 @@ float ReadSht31Humid()
 void DisplayMeasurementsOnSerialMonitor()
 {
 	PrintTimeAndDate();
-	Serial.println("Battery status: " + String(ReadBattery(1))+" %");
-	//Serial.println("BME sensor temperature: " + String(ReadBmeTemperature())+" C");
-	//Serial.println("BME sensor humid: " + String(ReadBmeHumid())+" %");
-	//Serial.println("BME sensor pressure: " + String(ReadBmePressure()) + " mbar");
+	Serial.println("Battery status: " + String(ReadBattery(10))+" %");
+	Serial.println("BME sensor temperature: " + String(ReadBmeTemperature())+" C");
+	Serial.println("BME sensor humid: " + String(ReadBmeHumid())+" %");
+	Serial.println("BME sensor pressure: " + String(ReadBmePressure()) + " mbar");
 	Serial.println("SHT31 sensor temperature: " + String(ReadSht31Temp()) + " C");
 	Serial.println("SHT31 sensor Humid: " + String(ReadSht31Humid()) + " %");
 	Serial.println("Soil moisture: " + String(ReadSoil(10)) + "%");
@@ -570,7 +571,7 @@ void LedSignal(int ledRepeat, int ledDelay)
 
  int UploadToIot()
 {
-	Serial.println(F("Uploading:..."));
+	Serial.println(F("Testin grounds: Uploading:..."));
 	//gsmSerial.println(F("AT+CBC"));		//read battery status
 	//battPercentGsm=ReadBattPercent();
 	gsmSerial.println(F("AT+CREG?"));
@@ -605,8 +606,8 @@ void LedSignal(int ledRepeat, int ledDelay)
   if (errorCount>0)
     return errorCount;
   PurgeGsmBuffer(2000);
-	gsmSerial.println(thingSpeakUpadate + "&field1=" + String(ReadSht31Temp())+ "&field2=" + String(ReadSht31Humid()) + "&field3="+ String(battPercent) + String(tare + ReadWeight(10)) + "&field8=" + String(ReadSoil(10)));	
-	//gsmSerial.println(thingSpeakUpadate + "&field1=" + String(ReadSht31Temp())+ "&field2=" + String(ReadSht31Humid()) + "&field3="+ String(battPercent) + "&field4=" + String(ReadBmeTemperature()) + "&field5=" + String(ReadBmePressure()) + "&field6=" + String(ReadBmeHumid())+ "&field7=" + String(tare + ReadWeight(10)) + "&field8=" + String(ReadSoil(10)));
+	//gsmSerial.println(thingSpeakUpadate + "&field1=" + String(ReadSht31Temp())+ "&field2=" + String(ReadSht31Humid()) + "&field3="+ String(battPercent) + String(tare + ReadWeight(10)) + "&field8=" + String(ReadSoil(10)));	
+	gsmSerial.println(thingSpeakUpadate + "&field1=" + String(ReadSht31Temp())+ "&field2=" + String(ReadSht31Humid()) + "&field3="+ String(battPercent) + "&field4=" + String(ReadBmeTemperature()) + "&field5=" + String(ReadBmePressure()) + "&field6=" + String(ReadBmeHumid())+ "&field7=" + String(tare + ReadWeight(10)) + "&field8=" + String(ReadSoil(10)));
 	gsmSerial.println(String(char(26)));
   	PurgeGsmBuffer(2000);
 	//ReadGsmBuffer(2000);
@@ -686,10 +687,10 @@ void setup()
 
 	//bme280 check
 	//----------------------------------------------
-	// if (!bme.begin())
-	// {
-	// 	Serial.println(F("Could not find a valid BMP280 sensor, check wiring!"));
-	// }
+	if (!bme.begin())
+	{
+		Serial.println(F("Could not find a valid BMP280 sensor, check wiring!"));
+	}
 	//----------------------------------------------
   //DisplayMeasurementsOnSerialMonitor();
 LedSignal(0,0);
@@ -735,7 +736,7 @@ if (wakeupSwitch==0)
 				ResetScale(0);
 				// do
 				// {
-				battPercent=ReadBattery(3);
+				battPercent=ReadBattery(10);
 				// } while (battPercentGsm<=0||battPercentGsm>100);
 				
 				//DisplayMeasurementsOnSerialMonitor();
@@ -787,20 +788,24 @@ if (wakeupSwitch==0)
 		WakeUpScale();
 		SignalForWakeUp();
 		scale.tare();	//tare scales to cancel any changes it came from the beekeeper. In float tare we are keeping changes from the last measure and readings from the scale from this point will be added to that value
-    do
-    {
-      battPercent=ReadBattery(1);
-    } while (battPercent<=0||battPercent>100);
+      	
+		battPercent=ReadBattery(10);
+    
     //DisplayMeasurementsOnSerialMonitor();
     do
     {
       UploadToIot();
       //Serial.println("Error count: "+String(errorCount));
     }
-    while (errorCount!=0);
-		wakeupSwitch=0;
-		LedSignal(0,0);
-		//Serial.println(F("Continuing normal operation"));
+	while (errorCount>0&&errorCount<10);
+	if (errorCount==10)
+	{
+		errorCount=0;
+		resetFunc();		//Reset arduino
+	}
+	wakeupSwitch=0;
+	LedSignal(0,0);
+	//Serial.println(F("Continuing normal operation"));
 	}
 
 }
